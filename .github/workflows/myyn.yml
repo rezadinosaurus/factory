@@ -15,7 +15,7 @@ on:
 env:
   KBUILD_BUILD_USER: "lloromannic"
   KBUILD_BUILD_HOST: "stargaze"
-  GCC_URL: "https://github.com/mvaisakh/gcc-build/releases/download/25102026/eva-gcc-arm64-25102026.xz"
+  GCC_URL: "https://github.com/mvaisakh/gcc-build/releases/download/08112026/eva-gcc-arm64-08112026.xz"
 
 jobs:
   defconfig:
