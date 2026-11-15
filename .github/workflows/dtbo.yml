@@ -1,0 +1,85 @@
+name: GCC DTB Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository: { description: 'Repo', required: true, default: 'rezadinosaurus/android_kernel_qcom_sm8250' }
+      branch: { description: 'Branch', required: true, default: 'lineage-' }
+      defconfig: { description: 'Defconfig', required: true, default: 'vendor/alioth_defconfig' }
+      gcc_url: { description: 'Eva GCC download link (.xz)', required: true, default: 'https://github.com/mvaisakh/gcc-build/releases/download/15112026/eva-gcc-arm64-15112026.xz' }
+
+env:
+  CHAT_ID: ${{ secrets.CHAT_ID }}
+  BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+  KBUILD_BUILD_USER: "moon.ell"
+  KBUILD_BUILD_HOST: "stargaze"
+  GCC_URL: ${{ github.event.inputs.gcc_url }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: ${{ github.event.inputs.repository }}
+        ref: ${{ github.event.inputs.branch }}
+        submodules: recursive
+
+    - name: Start Notification
+      run: |
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          -d chat_id="${CHAT_ID}" \
+          -d text="Build DTB started: ${{ github.event.inputs.repository }} [${{ github.event.inputs.branch }}]"
+
+    - name: Setup and Build
+      run: |
+        sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc zip gcc-arm-linux-gnueabi python3 python-is-python3 git wget curl device-tree-compiler xz-utils
+
+        BUILD_TIME=$(TZ="Asia/Jakarta" date +'%H%M-%d%m%y')
+        echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
+
+        mkdir -p tc/gcc
+        wget -q "$GCC_URL" -O tc/gcc.tar.xz
+        tar -xf tc/gcc.tar.xz -C tc/gcc --strip-components=1
+        export PATH=$PWD/tc/gcc/bin:$PATH
+
+        GCC_PREFIX=$(find $PWD/tc/gcc/bin -name '*-gcc' | head -n1 | sed 's/.*\///;s/gcc$//')
+        echo "Detected GCC prefix: $GCC_PREFIX"
+
+        ARGS="O=out ARCH=arm64 CROSS_COMPILE=${GCC_PREFIX} CROSS_COMPILE_ARM32=arm-linux-gnueabi- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- KCFLAGS=-Wno-error"
+
+        make $ARGS ${{ github.event.inputs.defconfig }}
+        make -j$(nproc) $ARGS dtbs 2>&1 | tee dtb_build.log
+        make -j$(nproc) $ARGS dtboimage 2>&1 | tee -a dtb_build.log || true
+        make $ARGS dtb.img 2>&1 | tee -a dtb_build.log || true
+
+        mkdir -p dist
+        find out/arch/arm64/boot/dts -name "*.dtb" -exec cp {} dist/ \;
+        find out/arch/arm64/boot/dts -name "*.dtbo" -exec cp {} dist/ \;
+        [ -f out/arch/arm64/boot/dtb.img ] && cp out/arch/arm64/boot/dtb.img dist/ || true
+        [ -f out/arch/arm64/boot/dtbo.img ] && cp out/arch/arm64/boot/dtbo.img dist/ || true
+
+        ZIP_NAME="dtb-$BUILD_TIME.zip"
+        zip -rj "$ZIP_NAME" dist/
+        echo "FINAL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+
+    - name: Upload Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: DTB-Build-${{ env.BUILD_TIME }}
+        path: |
+          *.zip
+          *.log
+        retention-days: 1
+
+    - name: Telegram Notification
+      if: always()
+      run: |
+        [ -f dtb_build.log ] && curl -s -F document=@"dtb_build.log" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" -F chat_id="${CHAT_ID}" -F caption="DTB log - ${{ github.event.inputs.branch }}"
+
+        if [ "${{ job.status }}" = "success" ] && [ -f "${{ env.FINAL_ZIP }}" ]; then
+          curl -s -F document=@"${{ env.FINAL_ZIP }}" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" -F chat_id="${CHAT_ID}" -F caption="Build done - ${{ github.event.inputs.branch }}"
+        else
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d chat_id="${CHAT_ID}" -d text="Build failed [${{ github.event.inputs.branch }}] - check artifacts"
+        fi
