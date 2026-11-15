@@ -61,24 +61,23 @@ jobs:
         ARGS="O=out ARCH=arm64 CROSS_COMPILE=${GCC_PREFIX} CROSS_COMPILE_ARM32=arm-linux-gnueabi- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- KCFLAGS=-Wno-error"
 
         make $ARGS ${{ github.event.inputs.defconfig }}
-        make -j$(nproc) $ARGS dtbs dtboimage || true
-        make $ARGS dtb.img || true
+        make -j$(nproc) $ARGS dtbs || true
         make -j$(nproc) $ARGS 2>&1 | tee compile.log
 
         if [ -f out/arch/arm64/boot/Image ]; then
           ZIP_NAME="imell-$BUILD_TIME.zip"
+          DTS_OUT=out/arch/arm64/boot/dts/vendor/qcom
           mkdir -p dts_output
-          find out/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} ./ \;
 
-          for f in *.dtb; do
-            [ -f "$f" ] && dtc -I dtb -O dts -o "dts_output/${f}.dts" "$f"
+          for f in $DTS_OUT/*.dtb; do
+            [ -f "$f" ] && dtc -I dtb -O dts -o "dts_output/$(basename "$f").dts" "$f"
           done
 
-          [ -f out/arch/arm64/boot/dtb.img ] && cp out/arch/arm64/boot/dtb.img ./
-          [ -f out/arch/arm64/boot/dtbo.img ] && cp out/arch/arm64/boot/dtbo.img ./
+          cat $DTS_OUT/kona.dtb $DTS_OUT/kona-v2.dtb $DTS_OUT/kona-v2.1.dtb > dtb.img
+          python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create dtbo.img --page_size=4096 $DTS_OUT/*.dtbo
           cp out/arch/arm64/boot/Image ./
 
-          zip -r "$ZIP_NAME" Image *.dtb *.img dts_output/
+          zip -r "$ZIP_NAME" Image *.img dts_output/
           echo "FINAL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
         fi
 
