@@ -11,11 +11,15 @@ on:
         description: "Kernel branch"
         required: true
         default: "lineage-base"
+      gcc_url:
+        description: "Eva GCC download link (.xz)"
+        required: true
+        default: "https://github.com/mvaisakh/gcc-build/releases/download/15112026/eva-gcc-arm64-15112026.xz"
 
 env:
   KBUILD_BUILD_USER: "lloromannic"
   KBUILD_BUILD_HOST: "stargaze"
-  GCC_URL: "https://github.com/mvaisakh/gcc-build/releases/download/08112026/eva-gcc-arm64-08112026.xz"
+  GCC_URL: ${{ github.event.inputs.gcc_url }}
 
 jobs:
   defconfig:
