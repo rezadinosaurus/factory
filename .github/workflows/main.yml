@@ -6,6 +6,7 @@ on:
       repository: { description: 'Repo', required: true, default: 'rezadinosaurus/android_kernel_qcom_sm8250' }
       branch: { description: 'Branch', required: true, default: 'lineage-latte' }
       defconfig: { description: 'Defconfig', required: true, default: 'vendor/alioth_defconfig' }
+      gcc_url: { description: 'Eva GCC download link (.xz)', required: true, default: 'https://github.com/mvaisakh/gcc-build/releases/download/15112026/eva-gcc-arm64-15112026.xz' }
       kernelsu_branch: { description: 'KSU Branch', required: false, default: 'master' }
       nomount: { description: 'Enable nomount', required: false, type: boolean, default: true }
       nomount_branch: { description: 'Nomount Branch', required: false, default: 'master' }
@@ -15,6 +16,7 @@ env:
   BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
   KBUILD_BUILD_USER: "lloromannic"
   KBUILD_BUILD_HOST: "stargaze"
+  GCC_URL: ${{ github.event.inputs.gcc_url }}
 
 jobs:
   build:
@@ -41,7 +43,7 @@ jobs:
         echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
 
         mkdir -p tc/gcc
-        wget -q "https://github.com/mvaisakh/gcc-build/releases/download/08112026/eva-gcc-arm64-08112026.xz" -O tc/gcc.tar.xz
+        wget -q "$GCC_URL" -O tc/gcc.tar.xz
         tar -xf tc/gcc.tar.xz -C tc/gcc --strip-components=1
         export PATH=$PWD/tc/gcc/bin:$PATH
 
@@ -95,4 +97,3 @@ jobs:
       run: |
         [ -f "compile.log" ] && curl -s -F document=@"compile.log" "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendDocument" -F chat_id="${{ env.CHAT_ID }}" -F caption="Build log"
         [ -f "${{ env.FINAL_ZIP }}" ] && curl -s -F document=@"${{ env.FINAL_ZIP }}" "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendDocument" -F chat_id="${{ env.CHAT_ID }}" -F caption="build done sayangg!!!"
-        
