@@ -50,17 +50,26 @@ jobs:
 
         make $ARGS ${{ github.event.inputs.defconfig }}
         make -j$(nproc) $ARGS dtbs 2>&1 | tee dtb_build.log
-        make -j$(nproc) $ARGS dtboimage 2>&1 | tee -a dtb_build.log || true
-        make $ARGS dtb.img 2>&1 | tee -a dtb_build.log || true
 
-        mkdir -p dist
+        DTS_OUT=out/arch/arm64/boot/dts/vendor/qcom
+        mkdir -p dist dts_output
+
         find out/arch/arm64/boot/dts -name "*.dtb" -exec cp {} dist/ \;
         find out/arch/arm64/boot/dts -name "*.dtbo" -exec cp {} dist/ \;
-        [ -f out/arch/arm64/boot/dtb.img ] && cp out/arch/arm64/boot/dtb.img dist/ || true
-        [ -f out/arch/arm64/boot/dtbo.img ] && cp out/arch/arm64/boot/dtbo.img dist/ || true
+
+        for f in dist/*.dtb; do
+          [ -f "$f" ] && dtc -I dtb -O dts -o "dts_output/$(basename "$f").dts" "$f" 2>/dev/null || true
+        done
+
+        cat $DTS_OUT/kona.dtb $DTS_OUT/kona-v2.dtb $DTS_OUT/kona-v2.1.dtb > dist/dtb.img
+
+        python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create dist/dtbo.img --page_size=4096 $DTS_OUT/*.dtbo 2>&1 | tee -a dtb_build.log
+
+        ls -lh dist/dtb.img dist/dtbo.img
 
         ZIP_NAME="dtb-$BUILD_TIME.zip"
-        zip -rj "$ZIP_NAME" dist/
+        cp -r dts_output dist/
+        zip -r "$ZIP_NAME" dist/
         echo "FINAL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
 
     - name: Upload Artifacts
