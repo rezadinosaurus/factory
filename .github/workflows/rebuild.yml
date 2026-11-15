@@ -11,6 +11,10 @@ on:
         type: choice
         default: alioth
         options: [alioth, apollo, cas, cmi, dagu, elish, enuma, lmi, munch, psyche, thyme, umi, all]
+      gcc_url: { description: 'Eva GCC download link (.xz)', required: true, default: 'https://github.com/mvaisakh/gcc-build/releases/download/15112026/eva-gcc-arm64-15112026.xz' }
+
+env:
+  GCC_URL: ${{ github.event.inputs.gcc_url }}
 
 jobs:
   rebuild:
@@ -26,7 +30,7 @@ jobs:
         sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc gcc-arm-linux-gnueabi python3 python-is-python3 wget xz-utils
 
         mkdir -p tc/gcc
-        wget -q "https://github.com/mvaisakh/gcc-build/releases/download/08112026/eva-gcc-arm64-08112026.xz" -O tc/gcc.tar.xz
+        wget -q "$GCC_URL" -O tc/gcc.tar.xz
         tar -xf tc/gcc.tar.xz -C tc/gcc --strip-components=1
         echo "$PWD/tc/gcc/bin" >> $GITHUB_PATH
 
@@ -69,4 +73,3 @@ jobs:
         name: defconfig-${{ github.event.inputs.device }}
         path: defconfig_output/
         retention-days: 7
-        
